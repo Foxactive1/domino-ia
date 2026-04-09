@@ -1,1 +1,297 @@
-*
+:root {
+  --domino-bg: #f5e6c8;
+  --domino-border: #2c1810;
+  --pip-color: #1a0a00;
+  --board-bg: #1a6b3c;
+  --board-border: #0d4a28;
+}
+
+body {
+  background: #1a1a2e;
+  min-height: 100vh;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+.domino-peca {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 54px;
+  height: 96px;
+  background: linear-gradient(145deg, #fdf6e3 0%, #f0e0b8 40%, #ede0c4 70%, #e8d5a3 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 5px 5px;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s;
+  position: relative;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(0,0,0,0.15),
+              2px 4px 0px #8a6a3a, 3px 6px 10px rgba(0,0,0,0.55);
+  user-select: none;
+  outline: 2px solid #7a5230;
+  outline-offset: -2px;
+}
+
+.domino-peca::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 5px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.35) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.domino-peca:hover {
+  transform: translateY(-8px) scale(1.1) rotate(-1deg);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(0,0,0,0.15),
+              4px 10px 2px #6b4e20, 5px 14px 20px rgba(0,0,0,0.65);
+}
+
+.domino-peca.selecionada {
+  transform: translateY(-14px) scale(1.13) rotate(0deg);
+  outline: 2.5px solid #00e5ff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 0 0 4px rgba(0,229,255,0.35),
+              4px 12px 2px #6b4e20, 5px 18px 24px rgba(0,229,255,0.3);
+}
+
+.domino-peca.horizontal {
+  flex-direction: row;
+  width: 96px;
+  height: 54px;
+}
+
+.domino-peca.bloqueada {
+  filter: saturate(0.3) brightness(0.7);
+  cursor: not-allowed;
+}
+
+.domino-peca.domino-tabuleiro {
+  width: 48px;
+  height: 86px;
+  cursor: default !important;
+  transform: none !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 1px 3px 0px #7a5a2a, 2px 5px 8px rgba(0,0,0,0.5) !important;
+}
+
+.domino-peca.domino-tabuleiro.horizontal {
+  width: 86px;
+  height: 48px;
+}
+
+.domino-peca.domino-tabuleiro:hover {
+  transform: none !important;
+}
+
+.domino-face {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.domino-face svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.domino-divisor {
+  width: calc(100% - 8px);
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, #6b4020 20%, #3d200a 50%, #6b4020 80%, transparent);
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.domino-peca.horizontal .domino-divisor {
+  width: 1.5px;
+  height: calc(100% - 8px);
+  background: linear-gradient(180deg, transparent, #6b4020 20%, #3d200a 50%, #6b4020 80%, transparent);
+}
+
+#tabuleiro {
+  min-height: 130px;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,0.07) 0px, rgba(0,0,0,0.07) 1px, transparent 1px, transparent 40px),
+              repeating-linear-gradient(0deg,  rgba(0,0,0,0.07) 0px, rgba(0,0,0,0.07) 1px, transparent 1px, transparent 40px),
+              linear-gradient(160deg, #1a7a42 0%, #155c33 60%, #0d4224 100%);
+  border: 3px solid #0a3320;
+  border-radius: 14px;
+  padding: 14px;
+  overflow-x: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  box-shadow: inset 0 2px 12px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.tabuleiro-empty {
+  color: rgba(255,255,255,0.4);
+  font-style: italic;
+  width: 100%;
+  text-align: center;
+}
+
+#maoJogador {
+  min-height: 100px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+#placarSection {
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+  border: 1px solid #2a2a4a;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.placar-titulo {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 10px;
+}
+
+.placar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  transition: background 0.2s;
+}
+
+.placar-row:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.placar-jogador {
+  border-left: 3px solid #2ecc71;
+  background: rgba(46,204,113,0.07);
+}
+
+.placar-ia {
+  border-left: 3px solid #e74c3c;
+  background: rgba(231,76,60,0.07);
+}
+
+.placar-empate {
+  border-left: 3px solid #f39c12;
+  background: rgba(243,156,18,0.07);
+}
+
+.placar-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.placar-label {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+#perfilCard {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+
+#lojaModal .modal-content {
+  background: #1a1a2e;
+  color: white;
+}
+
+.tema-item {
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: 0.2s;
+}
+
+.tema-item:hover {
+  border-color: #00e5ff;
+}
+
+#anuncioSimulado {
+  background: #2c3e50;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+#toastResultado {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  z-index: 9999;
+  transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), opacity 0.4s;
+  opacity: 0;
+  min-width: 280px;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  pointer-events: none;
+  border-radius: 12px;
+  padding: 14px 24px;
+}
+
+#toastResultado.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.dot-turno {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-turno.ativo {
+  background: #2ecc71;
+  box-shadow: 0 0 6px #2ecc71;
+}
+
+.dot-turno.inativo {
+  background: #555;
+}
+
+@media (max-width: 576px) {
+  .domino-peca {
+    width: 44px;
+    height: 78px;
+  }
+  .domino-face {
+    width: 32px;
+    height: 32px;
+  }
+  .domino-peca.horizontal {
+    width: 78px;
+    height: 44px;
+  }
+  .domino-peca.domino-tabuleiro {
+    width: 40px;
+    height: 70px;
+  }
+  .domino-peca.domino-tabuleiro.horizontal {
+    width: 70px;
+    height: 40px;
+  }
+}
