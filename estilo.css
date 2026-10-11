@@ -1039,3 +1039,12 @@ dialog input[type=range] {
   }
 
 }
+
+/* Multiplayer lobby shares the premium visual tokens. */
+.online-panel { margin-bottom: 24px; }
+.online-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.join-room { display: flex; gap: 8px; flex-wrap: wrap; }
+.join-room input { width: 155px; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; text-transform: uppercase; }
+#roomCodeDisplay { letter-spacing: 3px; color: var(--gold); }
+button:disabled, select:disabled { opacity: .5; }
+@media (max-width: 520px) { .online-controls, .join-room { width: 100%; } .join-room input { flex: 1; } }

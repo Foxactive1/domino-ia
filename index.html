@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="estilo.css">
 <script src="jogo.js" defer>
 </script>
+<script src="online.js" defer></script>
 </head>
 <body>
 <div id="toastResultado" role="status" aria-live="polite">
@@ -38,9 +39,19 @@
 </h1>
 <p>Uma mesa, um desafio. Faça cada movimento contar.</p>
 </div>
-<span class="session-label">
+<span class="session-label" id="sessionLabel">
 <span class="dot-turno ativo">
 </span> Você × Inteligência artificial</span>
+</section>
+<section class="panel online-panel" aria-labelledby="onlineTitle">
+<div class="section-heading"><h2 id="onlineTitle">Jogar com um amigo</h2><span class="tag">ONLINE</span></div>
+<p class="panel-description">Crie uma sala ou entre pelo código. Cada jogador vê apenas as próprias peças.</p>
+<div id="onlineLobby" class="online-controls">
+<button id="btnCreateRoom" class="btn btn-primary" data-online-action>Criar sala</button>
+<form id="joinRoomForm" class="join-room"><label class="sr-only" for="roomCodeInput">Código da sala</label><input id="roomCodeInput" placeholder="Código da sala" maxlength="6" autocomplete="off" autocapitalize="characters" pattern="[A-Za-z2-9]{6}" required><button class="btn" data-online-action>Entrar</button></form>
+</div>
+<div id="onlineRoom" class="online-controls d-none"><span>Sala <strong id="roomCodeDisplay"></strong></span><button id="btnCopyInvite" class="btn" data-online-action>Copiar convite</button><button id="btnReconnectRoom" class="btn" data-online-action>Reconectar</button><button id="btnLeaveRoom" class="btn" data-online-action>Sair da sala</button></div>
+<p id="onlineStatus" class="panel-description" role="status" aria-live="polite">Jogue contra a IA ou convide um amigo. Para criar salas, use o endereço online do jogo.</p>
 </section>
 <div class="game-layout">
 <section class="play-area" aria-label="Área da partida">
@@ -64,7 +75,7 @@
 <div class="opponent">
 <span class="avatar ai-avatar" aria-hidden="true">✦</span>
 <div>
-<strong>Inteligência artificial</strong>
+<strong id="opponentName">Inteligência artificial</strong>
 <small>
 <span id="contadorIA">0</span> peças na mão</small>
 </div>
@@ -116,7 +127,7 @@
 <section id="placarSection" class="panel">
 <div class="section-heading">
 <h2>Seu desempenho</h2>
-<button class="text-button" onclick="Placar.resetarPlacar()">Zerar</button>
+<button id="btnResetPlacar" class="text-button" onclick="Placar.resetarPlacar()">Zerar</button>
 </div>
 <p class="panel-description">Cada partida, uma nova oportunidade.</p>
 <div class="score-grid">
