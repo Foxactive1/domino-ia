@@ -2,6 +2,13 @@
 //  DOMINÓ PRO - LÓGICA COMPLETA (separada do HTML)
 // ============================================================
 
+// Persistência local: falhas de armazenamento não impedem a partida.
+const Storage = {
+  getItem(key) { try { return localStorage.getItem(key); } catch { return null; } },
+  setItem(key, value) { try { localStorage.setItem(key, value); } catch { /* sessão sem persistência */ } },
+  read(key) { try { const value = JSON.parse(this.getItem(key)); return value && typeof value === 'object' ? value : {}; } catch { return {}; } }
+};
+
 // ---------- UTILS ----------
 const Utils = {
   gerarPecas() {
@@ -65,7 +72,9 @@ const Utils = {
     return face;
   },
   criarElementoPeca(peca, horizontal = false, classe = '') {
-    const div = document.createElement('div');
+    const div = document.createElement(classe.includes('domino-tabuleiro') ? 'div' : 'button');
+    if (div.tagName === 'BUTTON') div.type = 'button';
+    div.setAttribute('aria-label', `Peça ${peca[0]} e ${peca[1]}`);
     div.className = 'domino-peca nova-peca' + (horizontal ? ' horizontal' : '') + (classe ? ' ' + classe : '');
     div.appendChild(this.criarFaceSVG(peca[0]));
 
@@ -104,9 +113,9 @@ const AudioManager = {
         this.ativo = false;
       }
     }
-    const saved = localStorage.getItem('domino_som_vol');
+    const saved = Storage.getItem('domino_som_vol');
     if (saved) this.volumeEfeitos = parseFloat(saved);
-    const savedAtivo = localStorage.getItem('domino_som_ativo');
+    const savedAtivo = Storage.getItem('domino_som_ativo');
     if (savedAtivo !== null) this.ativo = (savedAtivo === 'true');
   },
 
@@ -241,15 +250,15 @@ const AudioManager = {
 
   setVolume(vol) {
     this.volumeEfeitos = vol;
-    localStorage.setItem('domino_som_vol', vol);
+    Storage.setItem('domino_som_vol', vol);
   },
   setAtivo(estado) {
     this.ativo = estado;
-    localStorage.setItem('domino_som_ativo', estado);
+    Storage.setItem('domino_som_ativo', estado);
   },
   toggle() {
     this.ativo = !this.ativo;
-    localStorage.setItem('domino_som_ativo', this.ativo);
+    Storage.setItem('domino_som_ativo', this.ativo);
     return this.ativo;
   }
 };
@@ -261,19 +270,21 @@ const Conta = {
   premium: false,
   temas: ['clássico'],
   carregar() {
-    const data = JSON.parse(localStorage.getItem('domino_conta')) || { nome: 'Visitante', moedas: 0, premium: false, temas: ['clássico'] };
-    Object.assign(this, data);
+    const data = Storage.read('domino_conta') || { nome: 'Visitante', moedas: 0, premium: false, temas: ['clássico'] };
+    for (const key of ['nome', 'moedas', 'premium', 'temas']) {
+      if (Object.hasOwn(data, key) && typeof data[key] === typeof this[key] && (!Array.isArray(this[key]) || Array.isArray(data[key]))) this[key] = data[key];
+    }
     this.atualizarUI();
   },
   salvar() {
-    localStorage.setItem('domino_conta', JSON.stringify({ nome: this.nome, moedas: this.moedas, premium: this.premium, temas: this.temas }));
+    Storage.setItem('domino_conta', JSON.stringify({ nome: this.nome, moedas: this.moedas, premium: this.premium, temas: this.temas }));
     this.atualizarUI();
   },
   login() {
     const nome = document.getElementById('inputNome').value.trim() || 'Jogador';
     this.nome = nome;
     this.salvar();
-    bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
+    document.getElementById('loginModal').close();
     this.atualizarUI();
     Analytics.registrar('login', { nome });
   },
@@ -327,7 +338,7 @@ const Monetization = {
     }
   },
   assinarPremium() {
-    if (confirm('Assinar plano premium por R$9,90/mês?')) {
+    if (confirm('Assinar plano premium (simulação gratuita, sem cobrança)?')) {
       Conta.tornarPremium();
       Analytics.registrar('assinatura', { plano: 'premium', valor: 9.90 });
       UI.mostrarToast('Bem-vindo ao Premium!', 'success');
@@ -355,12 +366,14 @@ const Monetization = {
 const Placar = {
   jogador: 0, ia: 0, empate: 0, totalPartidas: 0, receitaTotal: 0,
   carregar() {
-    const data = JSON.parse(localStorage.getItem('domino_placar')) || { jogador:0, ia:0, empate:0, totalPartidas:0, receitaTotal:0 };
-    Object.assign(this, data);
+    const data = Storage.read('domino_placar') || { jogador:0, ia:0, empate:0, totalPartidas:0, receitaTotal:0 };
+    for (const key of ['jogador', 'ia', 'empate', 'totalPartidas', 'receitaTotal']) {
+      if (Number.isFinite(data[key]) && data[key] >= 0) this[key] = data[key];
+    }
     this.atualizarUI();
   },
   salvar() {
-    localStorage.setItem('domino_placar', JSON.stringify({ jogador:this.jogador, ia:this.ia, empate:this.empate, totalPartidas:this.totalPartidas, receitaTotal:this.receitaTotal }));
+    Storage.setItem('domino_placar', JSON.stringify({ jogador:this.jogador, ia:this.ia, empate:this.empate, totalPartidas:this.totalPartidas, receitaTotal:this.receitaTotal }));
     this.atualizarUI();
   },
   registrarVitoria(vencedor) {
@@ -384,11 +397,7 @@ const Placar = {
     document.getElementById('placarEmpate').textContent = this.empate;
     document.getElementById('totalPartidas').textContent = this.totalPartidas;
 
-    const receita = this.receitaTotal.toFixed(2);
-    document.getElementById('metricaReceita').textContent = `R$ ${receita}`;
-    const ltv = (this.totalPartidas > 0) ? (this.receitaTotal / Math.max(1, Conta.nome !== 'Visitante' ? 1 : 1)).toFixed(2) : 0;
-    document.getElementById('metricaLTV').textContent = `R$ ${ltv}`;
-    document.getElementById('metricaChurn').textContent = '5%';
+
   }
 };
 
@@ -396,9 +405,13 @@ const Placar = {
 const Game = {
   maoJogador: [], maoIA: [], estoque: [], tabuleiro: [], extremidades: [null, null],
   vezDoJogador: true, pecaSelecionada: null, indexSelecionado: null, jogoAtivo: false,
-  historico: [],
+  historico: [], timerIA: null,
 
   iniciar() {
+    clearTimeout(this.timerIA);
+    UI.esconderBotoesAcao();
+    document.getElementById('dicaSelecao').textContent = 'Selecione uma peça para jogar';
+    document.getElementById('historicoJogo').textContent = 'Nova partida. Faça seu primeiro movimento.';
     const todas = Utils.embaralhar(Utils.gerarPecas());
     this.maoJogador = todas.slice(0, 7);
     this.maoIA = todas.slice(7, 14);
@@ -413,6 +426,7 @@ const Game = {
 
     UI.renderizarMao();
     UI.atualizarInfo();
+    UI.atualizarIndicadorTurno();
     UI.setMensagem('info', '🎮 Jogo iniciado! Selecione uma peça.');
     UI.mostrarBotoesAcao();
     UI.renderizarTabuleiro();
@@ -461,9 +475,10 @@ const Game = {
     if (this.verificarFimDeJogo()) return;
 
     this.vezDoJogador = false;
+    UI.renderizarMao();
     UI.atualizarIndicadorTurno();
     UI.setMensagem('secondary', '🤖 IA está pensando...');
-    setTimeout(() => this.turnoIA(), 900);
+    this.timerIA = setTimeout(() => this.turnoIA(), 900);
   },
 
   comprarPeca() {
@@ -503,12 +518,13 @@ const Game = {
     UI.setMensagem('secondary', '⏩ Você passou. IA jogando...');
     UI.esconderBotoesAcao();
     this.vezDoJogador = false;
+    UI.renderizarMao();
     UI.atualizarIndicadorTurno();
-    setTimeout(() => this.turnoIA(), 900);
+    this.timerIA = setTimeout(() => this.turnoIA(), 900);
   },
 
   turnoIA() {
-    if (!this.jogoAtivo) return;
+    if (!this.jogoAtivo || this.vezDoJogador) return;
 
     const dif = document.getElementById('dificuldade').value;
     const jogaveis = this.maoIA.filter(p => this.podeJogar(p));
@@ -523,6 +539,7 @@ const Game = {
         peca = jogaveis.reduce((best, p) => (p[0]+p[1]) > (best[0]+best[1]) ? p : best);
       }
 
+      const indiceOriginal = this.maoIA.indexOf(peca);
       let lado;
       const encaixaEsq = peca[0] === this.extremidades[0] || peca[1] === this.extremidades[0];
       const encaixaDir = peca[0] === this.extremidades[1] || peca[1] === this.extremidades[1];
@@ -539,7 +556,7 @@ const Game = {
         this.extremidades[1] = peca[1];
       }
 
-      this.maoIA = this.maoIA.filter(p => !(p[0] === peca[0] && p[1] === peca[1]));
+      this.maoIA.splice(indiceOriginal, 1);
       this.adicionarHistorico(`🤖 IA jogou [${peca[0]}|${peca[1]}] na ${lado}`);
       AudioManager.tocar('ia_joga');
       UI.renderizarTabuleiro();
@@ -579,6 +596,8 @@ const Game = {
     if (this.verificarFimDeJogo()) return;
 
     this.vezDoJogador = true;
+    UI.renderizarMao();
+    UI.atualizarInfo();
     UI.atualizarIndicadorTurno();
     UI.mostrarBotoesAcao();
   },
@@ -606,6 +625,11 @@ const Game = {
 
   finalizar(vencedor) {
     this.jogoAtivo = false;
+    clearTimeout(this.timerIA);
+    this.pecaSelecionada = null;
+    this.indexSelecionado = null;
+    UI.renderizarMao();
+    document.getElementById('indicadorTurno').textContent = 'Partida encerrada';
     Placar.registrarVitoria(vencedor);
     if (vencedor === 'jogador') {
       AudioManager.tocar('vitoria');
@@ -647,6 +671,8 @@ const UI = {
       if (!Game.vezDoJogador || !Game.jogoAtivo) el.classList.add('bloqueada');
       else if (!jogavel && Game.tabuleiro.length > 0) el.classList.add('bloqueada');
 
+      el.disabled = el.classList.contains('bloqueada');
+      el.setAttribute('aria-pressed', String(i === Game.indexSelecionado));
       if (i === Game.indexSelecionado) el.classList.add('selecionada');
 
       el.addEventListener('click', () => this.selecionarPeca(i));
@@ -657,6 +683,8 @@ const UI = {
   selecionarPeca(i) {
     if (!Game.vezDoJogador || !Game.jogoAtivo) return;
     const peca = Game.maoJogador[i];
+    if (!peca || !Game.podeJogar(peca)) return;
+    document.getElementById('btnEsquerda').classList.remove('d-none');
 
     if (Game.indexSelecionado === i) {
       Game.indexSelecionado = null;
@@ -702,7 +730,7 @@ const UI = {
     const div = document.getElementById('tabuleiro');
     div.innerHTML = '';
     if (!Game.tabuleiro.length) {
-      div.innerHTML = '<div class="tabuleiro-empty">Jogue a primeira peça!</div>';
+      div.innerHTML = '<div class="tabuleiro-empty"><span class="empty-symbol" aria-hidden="true">⠿</span><strong>Sua jogada abre a mesa.</strong><span>Selecione uma peça e toque em Jogar.</span></div>';
       return;
     }
     Game.tabuleiro.forEach(peca => {
@@ -777,7 +805,15 @@ const UI = {
 window.addEventListener('load', () => {
   Conta.carregar();
   Placar.carregar();
-  AudioManager.init();
+  // O áudio é inicializado no primeiro gesto do usuário.
+  document.addEventListener('pointerdown', () => AudioManager.init(), { once: true });
+  document.addEventListener('keydown', () => AudioManager.init(), { once: true });
+  document.querySelectorAll('[data-dialog]').forEach(button => {
+    button.addEventListener('click', () => document.getElementById(button.dataset.dialog).showModal());
+  });
+  document.getElementById('inputNome').addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); Conta.login(); }
+  });
 
   // Event listeners dos botões
   document.getElementById('btnNovoJogo').addEventListener('click', () => Game.iniciar());
@@ -788,10 +824,10 @@ window.addEventListener('load', () => {
 
   // Som
   document.getElementById('btnSom').addEventListener('click', () => {
-    const modal = new bootstrap.Modal(document.getElementById('somModal'));
+    const modal = document.getElementById('somModal');
     document.getElementById('volEfeitos').value = AudioManager.volumeEfeitos;
     document.getElementById('somAtivo').checked = AudioManager.ativo;
-    modal.show();
+    modal.showModal();
   });
 
   document.getElementById('volEfeitos').addEventListener('input', (e) => {

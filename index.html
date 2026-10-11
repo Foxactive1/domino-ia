@@ -1,176 +1,230 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🧠 Dominó Pro | InNovaIdeia</title>
-  <!-- Bootstrap + Font Awesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
-  <!-- CSS custom -->
-  <link rel="stylesheet" href="estilo.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d1917">
+<meta name="description" content="Sua próxima boa jogada. Jogue dominó contra a IA em uma mesa elegante, com três níveis de dificuldade.">
+<title>Dominó Pro · InNovaIdeia</title>
+<link rel="stylesheet" href="estilo.css">
+<script src="jogo.js" defer>
+</script>
 </head>
-<body class="text-light">
-<main class="container py-4">
-  <!-- Toast -->
-  <div id="toastResultado" class="alert mb-0"></div>
-
-  <!-- Cabeçalho -->
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-    <h1 class="mb-0">🎲 Dominó Pro <small class="text-info fs-6">beta</small></h1>
-    <div class="d-flex gap-2 align-items-center">
-      <span id="userNameDisplay" class="badge bg-primary">Visitante</span>
-      <span id="moedasDisplay" class="badge bg-warning text-dark"><i class="fas fa-coins"></i> 0</span>
-      <span id="premiumBadge" class="badge bg-danger d-none">PREMIUM</span>
-      <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#loginModal"><i class="fas fa-user"></i></button>
-      <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#lojaModal"><i class="fas fa-store"></i></button>
-      <button id="btnSom" class="btn btn-outline-secondary rounded-circle" title="Configurar som">🔊</button>
-    </div>
-  </div>
-
-  <!-- Configuração do jogo -->
-  <section class="text-center mb-3 d-flex justify-content-center gap-2 flex-wrap">
-    <div>
-      <label for="dificuldade" class="form-label mb-0 me-1">Nível da IA:</label>
-      <select id="dificuldade" class="form-select form-select-sm d-inline-block w-auto">
-        <option value="easy">Fácil</option>
-        <option value="medium" selected>Médio</option>
-        <option value="hard">Difícil</option>
-      </select>
-    </div>
-    <button id="btnNovoJogo" class="btn btn-success btn-sm">
-      <i class="fas fa-play me-1"></i>Novo Jogo
-    </button>
-  </section>
-
-  <!-- Info do jogo -->
-  <section class="row mb-3 g-2">
-    <div class="col-6 col-md-3 text-center"><div class="bg-dark rounded p-2"><span class="text-danger fw-bold">🤖 IA</span><br><span id="contadorIA" class="badge bg-danger fs-5">7</span> peças</div></div>
-    <div class="col-6 col-md-3 text-center"><div class="bg-dark rounded p-2"><span class="text-success fw-bold">👤 Você</span><br><span id="contadorJogador" class="badge bg-success fs-5">7</span> peças</div></div>
-    <div class="col-6 col-md-3 text-center"><div class="bg-dark rounded p-2"><span class="text-warning fw-bold">📦 Estoque</span><br><span id="contadorEstoque" class="badge bg-warning text-dark fs-5">14</span> peças</div></div>
-    <div class="col-6 col-md-3 text-center"><div class="bg-dark rounded p-2"><span class="fw-bold" id="indicadorTurno"><span class="dot-turno ativo me-1"></span>Sua vez</span><br><small class="text-muted" id="extremidadesInfo">— | —</small></div></div>
-  </section>
-
-  <!-- Mensagem do jogo -->
-  <div id="mensagemJogo" class="alert alert-info text-center py-2 mb-3">Clique em <strong>Novo Jogo</strong> para começar!</div>
-
-  <!-- Tabuleiro -->
-  <div class="mb-3">
-    <h6 class="text-center text-muted mb-1"><i class="fas fa-chess-board me-1"></i>Tabuleiro</h6>
-    <div id="tabuleiro"><div class="tabuleiro-empty">O tabuleiro aparecerá aqui</div></div>
-  </div>
-
-  <!-- Mão do jogador -->
-  <div class="card bg-secondary-subtle border-secondary mb-3">
-    <div class="card-header bg-secondary text-light d-flex justify-content-between align-items-center py-2">
-      <h6 class="mb-0">🎯 Sua Mão</h6>
-      <small id="dicaSelecao" class="text-warning"></small>
-    </div>
-    <div class="card-body py-3">
-      <div id="maoJogador"></div>
-      <div id="botoesJogar" class="text-center mt-3 d-none gap-2 flex-wrap justify-content-center">
-        <button id="btnEsquerda" class="btn btn-primary btn-sm"><i class="fas fa-arrow-left me-1"></i>Esquerda</button>
-        <button id="btnDireita" class="btn btn-primary btn-sm">Direita <i class="fas fa-arrow-right ms-1"></i></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Ações extras -->
-  <div class="d-flex justify-content-center gap-2 flex-wrap mb-2">
-    <button id="btnComprar" class="btn btn-outline-warning btn-sm d-none"><i class="fas fa-plus-circle me-1"></i>Comprar Peça</button>
-    <button id="btnPassar" class="btn btn-outline-secondary btn-sm d-none"><i class="fas fa-forward me-1"></i>Passar Vez</button>
-  </div>
-
-  <!-- Anúncio simulado -->
-  <div id="anuncioSimulado" class="text-center text-light small d-none" onclick="Monetization.mostrarAnuncio()">
-    <i class="fas fa-ad me-1"></i> Anúncio (clique para ganhar 10 moedas!)
-  </div>
-
-  <!-- Histórico -->
-  <div class="mt-3 mb-4"><small id="historicoJogo" class="text-muted fst-italic"></small></div>
-
-  <!-- Placar e métricas -->
-  <div id="placarSection" class="mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <p class="placar-titulo mb-0">🏆 Placar & Métricas</p>
-      <button onclick="Placar.resetarPlacar()" class="btn btn-outline-danger btn-sm py-0" style="font-size:0.75rem"><i class="fas fa-trash-alt me-1"></i>Zerar</button>
-    </div>
-    <div class="row g-2">
-      <div class="col-4"><div class="placar-row placar-jogador"><div><div class="placar-label">👤 Você</div></div><div class="placar-num text-success" id="placarJogador">0</div></div></div>
-      <div class="col-4"><div class="placar-row placar-ia"><div><div class="placar-label">🤖 IA</div></div><div class="placar-num text-danger" id="placarIA">0</div></div></div>
-      <div class="col-4"><div class="placar-row placar-empate"><div><div class="placar-label">🤝 Empates</div></div><div class="placar-num text-warning" id="placarEmpate">0</div></div></div>
-    </div>
-    <div class="row mt-2 small text-muted">
-      <div class="col-6">Receita estimada: <span id="metricaReceita">R$ 0,00</span></div>
-      <div class="col-6">LTV simulado: <span id="metricaLTV">R$ 0,00</span></div>
-      <div class="col-6">Churn mensal: <span id="metricaChurn">0%</span></div>
-      <div class="col-6">Partidas: <span id="totalPartidas">0</span></div>
-    </div>
-  </div>
+<body>
+<div id="toastResultado" role="status" aria-live="polite">
+</div>
+<header class="topbar">
+<a class="brand" href="./" aria-label="Dominó Pro, início">
+<span class="brand-mark" aria-hidden="true">⠿</span>
+<span>DOMINÓ<span class="brand-pro">PRO</span>
+<small>by InNovaIdeia</small>
+</span>
+</a>
+<div class="profile-actions">
+<span id="premiumBadge" class="tag d-none">PREMIUM</span>
+<span id="moedasDisplay" class="coins">0</span>
+<button class="icon-button" id="btnSom" aria-label="Configurações de som">♫</button>
+<button class="profile-button" data-dialog="loginModal">
+<span class="avatar" aria-hidden="true">●</span>
+<span id="userNameDisplay">Visitante</span>
+</button>
+</div>
+</header>
+<main class="app-shell">
+<section class="intro">
+<div>
+<span class="eyebrow">ESTRATÉGIA EM CADA PEÇA</span>
+<h1>Sua próxima <em>boa jogada.</em>
+</h1>
+<p>Uma mesa, um desafio. Faça cada movimento contar.</p>
+</div>
+<span class="session-label">
+<span class="dot-turno ativo">
+</span> Você × Inteligência artificial</span>
+</section>
+<div class="game-layout">
+<section class="play-area" aria-label="Área da partida">
+<div class="table-toolbar">
+<div>
+<span class="eyebrow">SALA DE JOGO</span>
+<h2>Mesa clássica <span class="tag">DUPLO 6</span>
+</h2>
+</div>
+<div class="setup">
+<label for="dificuldade" class="sr-only">Dificuldade da IA</label>
+<select id="dificuldade">
+<option value="easy">IA · Fácil</option>
+<option value="medium" selected>IA · Médio</option>
+<option value="hard">IA · Difícil</option>
+</select>
+<button id="btnNovoJogo" class="btn btn-primary">↻ Nova partida</button>
+</div>
+</div>
+<div class="game-table">
+<div class="opponent">
+<span class="avatar ai-avatar" aria-hidden="true">✦</span>
+<div>
+<strong>Inteligência artificial</strong>
+<small>
+<span id="contadorIA">0</span> peças na mão</small>
+</div>
+<span class="opponent-backs" aria-hidden="true">▥ ▥ ▥</span>
+</div>
+<div class="board-caption">
+<span id="indicadorTurno">Aguardando partida</span>
+<span>Extremidades <strong id="extremidadesInfo">— | —</strong>
+</span>
+</div>
+<div id="tabuleiro" aria-label="Peças da mesa">
+<div class="tabuleiro-empty">
+<span class="empty-symbol" aria-hidden="true">⠿</span>
+<strong>A mesa está pronta.</strong>
+<span>Comece uma partida e escolha sua primeira peça.</span>
+</div>
+</div>
+<div class="table-bottom">
+<span>
+<span class="dot-turno ativo">
+</span> MESA CLÁSSICA</span>
+<span>Reserva <strong id="contadorEstoque">0</strong> peças</span>
+</div>
+</div>
+<div id="mensagemJogo" class="alert alert-info" role="status" aria-live="polite">Sua próxima partida começa em “Nova partida”.</div>
+<section class="hand-panel" aria-label="Sua mão">
+<div class="section-heading">
+<div>
+<span class="eyebrow">SUA ESTRATÉGIA</span>
+<h2>Sua mão <span class="count-pill" id="contadorJogador">0</span>
+</h2>
+</div>
+<small id="dicaSelecao">Selecione uma peça para jogar</small>
+</div>
+<div id="maoJogador">
+<span class="hand-empty">Suas peças aparecerão aqui.</span>
+</div>
+<div id="botoesJogar" class="move-actions d-none">
+<button id="btnEsquerda" class="btn btn-primary">← Esquerda</button>
+<button id="btnDireita" class="btn btn-primary">Direita →</button>
+</div>
+<div class="move-actions">
+<button id="btnComprar" class="btn btn-outline-warning d-none">＋ Comprar peça</button>
+<button id="btnPassar" class="btn btn-outline-secondary d-none">Passar vez →</button>
+</div>
+</section>
+</section>
+<aside class="sidebar">
+<section id="placarSection" class="panel">
+<div class="section-heading">
+<h2>Seu desempenho</h2>
+<button class="text-button" onclick="Placar.resetarPlacar()">Zerar</button>
+</div>
+<p class="panel-description">Cada partida, uma nova oportunidade.</p>
+<div class="score-grid">
+<div>
+<span class="score-number" id="placarJogador">0</span>
+<small>Vitórias</small>
+</div>
+<div>
+<span class="score-number muted" id="placarIA">0</span>
+<small>Derrotas</small>
+</div>
+<div>
+<span class="score-number gold" id="placarEmpate">0</span>
+<small>Empates</small>
+</div>
+</div>
+<div class="total-row">
+<span>Partidas jogadas</span>
+<strong id="totalPartidas">0</strong>
+</div>
+</section>
+<section class="panel guide">
+<span class="eyebrow">DOMINE A MESA</span>
+<h2>Simples de jogar.<br>Bom de desafiar.</h2>
+<ol>
+<li>
+<span>01</span>Selecione uma peça da sua mão.</li>
+<li>
+<span>02</span>Escolha uma extremidade compatível.</li>
+<li>
+<span>03</span>Esvazie sua mão para vencer.</li>
+</ol>
+<p>Sem encaixe? Compre uma peça ou passe. Com a mesa fechada, vence quem tiver menos pontos.</p>
+</section>
+<section class="panel history-panel">
+<div class="section-heading">
+<h2>Últimos movimentos</h2>
+<span class="live-label">AO VIVO</span>
+</div>
+<p id="historicoJogo">A história desta partida começa com você.</p>
+</section>
+<button class="shop-link" data-dialog="lojaModal">
+<span>✧</span>
+<div>
+<strong>Personalize sua experiência</strong>
+<small>Explore a loja de demonstração</small>
+</div>
+<span>→</span>
+</button>
+<button id="anuncioSimulado" class="reward-button d-none" onclick="Monetization.mostrarAnuncio()">Demonstração: ganhar 10 moedas</button>
+</aside>
+</div>
+<footer>
+<span>InNovaIdeia <span class="gold">·</span> Tecnologia que conecta ideias.</span>
+<span>Dominó Pro / Feito para boas jogadas</span>
+</footer>
 </main>
-
-<!-- Modais -->
-<div class="modal fade" id="loginModal" tabindex="-1">
-  <div class="modal-dialog modal-sm">
-    <div class="modal-content bg-dark text-light">
-      <div class="modal-header"><h5 class="modal-title">Login</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <input type="text" id="inputNome" class="form-control mb-2" placeholder="Seu nome" value="Jogador">
-        <button class="btn btn-primary w-100" onclick="Conta.login()">Entrar</button>
-      </div>
-    </div>
-  </div>
+<dialog id="loginModal" aria-labelledby="loginTitle">
+<form method="dialog">
+<div class="section-heading">
+<h2 id="loginTitle">Seu lugar à mesa</h2>
+<button class="icon-button" aria-label="Fechar">×</button>
 </div>
-
-<div class="modal fade" id="lojaModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content bg-dark text-light">
-      <div class="modal-header"><h5 class="modal-title">Loja</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <p><i class="fas fa-coins text-warning"></i> Moedas: <span id="modalMoedas">0</span></p>
-        <div class="list-group">
-          <div class="list-group-item bg-secondary d-flex justify-content-between align-items-center">
-            <span>100 moedas</span>
-            <button class="btn btn-sm btn-success" onclick="Monetization.comprarMoedas(100)">Comprar (R$1,99)</button>
-          </div>
-          <div class="list-group-item bg-secondary d-flex justify-content-between align-items-center">
-            <span>500 moedas</span>
-            <button class="btn btn-sm btn-success" onclick="Monetization.comprarMoedas(500)">Comprar (R$9,99)</button>
-          </div>
-          <div class="list-group-item bg-secondary d-flex justify-content-between align-items-center">
-            <span>Plano Premium (remove anúncios + temas)</span>
-            <button class="btn btn-sm btn-warning" onclick="Monetization.assinarPremium()">Assinar (R$9,90/mês)</button>
-          </div>
-        </div>
-        <hr>
-        <h6>Temas (500 moedas cada)</h6>
-        <div class="d-flex gap-2 flex-wrap">
-          <div class="tema-item p-2 bg-dark" onclick="Monetization.comprarTema('clássico')">Clássico</div>
-          <div class="tema-item p-2 bg-dark" onclick="Monetization.comprarTema('moderno')">Moderno</div>
-          <div class="tema-item p-2 bg-dark" onclick="Monetization.comprarTema('escuro')">Escuro</div>
-        </div>
-      </div>
-    </div>
-  </div>
+</form>
+<p class="panel-description">Perfil salvo neste navegador, sem criar uma conta online.</p>
+<label for="inputNome">Como podemos chamar você?</label>
+<input type="text" id="inputNome" maxlength="32" placeholder="Seu nome" value="Jogador">
+<button class="btn btn-primary full-width" onclick="Conta.login()">Salvar perfil</button>
+</dialog>
+<dialog id="lojaModal" aria-labelledby="shopTitle">
+<form method="dialog">
+<div class="section-heading">
+<h2 id="shopTitle">Loja de demonstração</h2>
+<button class="icon-button" aria-label="Fechar">×</button>
 </div>
-
-<div class="modal fade" id="somModal" tabindex="-1">
-  <div class="modal-dialog modal-sm">
-    <div class="modal-content bg-dark text-light">
-      <div class="modal-header"><h5 class="modal-title">Configurações de Som</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <label>Efeitos <input type="range" id="volEfeitos" min="0" max="1" step="0.1" value="1"></label>
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" id="somAtivo" checked>
-          <label class="form-check-label">Ativar sons</label>
-        </div>
-      </div>
-    </div>
-  </div>
+</form>
+<p class="panel-description">Compras e benefícios são simulados. Não há cobrança real.</p>
+<p>Seu saldo: <strong id="modalMoedas">0</strong> moedas</p>
+<div class="shop-item">
+<strong>100 moedas</strong>
+<button class="btn" onclick="Monetization.comprarMoedas(100)">Simular R$ 1,99</button>
 </div>
-
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="jogo.js" defer></script>
+<div class="shop-item">
+<strong>500 moedas</strong>
+<button class="btn" onclick="Monetization.comprarMoedas(500)">Simular R$ 9,99</button>
+</div>
+<div class="shop-item">
+<strong>Premium · sem anúncios</strong>
+<button class="btn btn-primary" onclick="Monetization.assinarPremium()">Simular assinatura</button>
+</div>
+<p class="panel-description">Temas colecionáveis: 500 moedas cada. Alteração visual dos temas ainda não disponível.</p>
+<div class="theme-options">
+<button class="btn" onclick="Monetization.comprarTema('clássico')">Clássico</button>
+<button class="btn" onclick="Monetization.comprarTema('moderno')">Moderno</button>
+<button class="btn" onclick="Monetization.comprarTema('escuro')">Escuro</button>
+</div>
+</dialog>
+<dialog id="somModal" aria-labelledby="soundTitle">
+<form method="dialog">
+<div class="section-heading">
+<h2 id="soundTitle">Som da mesa</h2>
+<button class="icon-button" aria-label="Fechar">×</button>
+</div>
+</form>
+<label for="volEfeitos">Volume dos efeitos</label>
+<input type="range" id="volEfeitos" min="0" max="1" step="0.1" value="1">
+<label class="check-label">
+<input type="checkbox" id="somAtivo" checked> Ativar sons</label>
+</dialog>
 </body>
 </html>
