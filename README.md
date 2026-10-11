@@ -1,6 +1,6 @@
 # Dominó Pro · InNovaIdeia
 
-Jogo de dominó duplo-seis contra uma IA baseada em regras, com três dificuldades e interface responsiva em verde profundo, marfim e dourado.
+Jogo de dominó duplo-seis contra uma IA baseada em regras ou contra um amigo online, com interface responsiva em verde profundo, marfim e dourado.
 
 ## Executar
 
@@ -10,7 +10,7 @@ Abra `index.html` em um navegador moderno ou sirva a pasta:
 python -m http.server 8080
 ```
 
-Acesse http://localhost:8080. Em outro dispositivo na mesma rede, use o IP do computador. Não requer npm, build, serviços externos nem chaves de API. Pode ser hospedado como site estático em GitHub Pages, Vercel ou outro servidor.
+Acesse http://localhost:8080. Em outro dispositivo na mesma rede, use o IP do computador. O modo IA não requer npm, build, serviços externos nem chaves de API. O modo online exige o servidor Python abaixo. Pode ser hospedado como site estático em GitHub Pages, Vercel ou outro servidor.
 
 ## Experiência
 
@@ -54,3 +54,63 @@ Os testes de lógica usam uma simulação mínima de DOM e não substituem teste
 ## Demonstrações e limites
 
 A loja, moedas e assinatura Premium são simulações locais, sem pagamentos reais. Temas podem ser registrados como colecionáveis; a troca visual de tema ainda não está implementada. O perfil não é uma autenticação online. Dados ficam no navegador e podem desaparecer se o armazenamento for limpo. Se ele estiver indisponível, o jogo continua apenas durante a sessão.
+
+
+## Multiplayer online
+
+Usa a mesma arquitetura do Jogo da Velha: Flask + Flask-SocketIO + cliente Socket.IO 4.8.1. O cliente foi copiado do projeto de referência, com o aviso de licença MIT preservado em `vendor/socket.io.min.js`.
+
+```bash
+python -m venv .venv
+# Linux / Termux:
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python server.py
+```
+
+Abra http://localhost:5000 (ou o IP do computador na mesma rede). No site, salve seu nome no perfil, clique em **Criar sala** e envie o código ou **Copiar convite** ao amigo. Ele abre o link no endereço do mesmo servidor e clica em **Entrar**. No modo online, **Nova partida** passa a ser **Pedir revanche**: ambos precisam aceitar após o término. Não é preciso publicar dois serviços separados.
+
+- O servidor distribui as peças, valida turno, encaixe, compra e passe.
+- Cada conexão recebe sua mão, a mesa pública e apenas a quantidade de peças do adversário e da reserva.
+- Revisões da mesa rejeitam comandos atrasados ou duplicados.
+- Desconexões pausam a partida. A sessão desta aba guarda um token privado em `sessionStorage`; ao reconectar ou recarregar a mesma aba, o jogador retoma sua posição. **Reconectar** permite tentar novamente manualmente. Não compartilhe o token; o convite contém apenas o código.
+- Sair explicitamente encerra a sala para ambos. Salas inativas expiram após duas horas. O placar online pertence à sala e fica separado do placar local contra IA.
+- Um código dá acesso à vaga livre. Não há cadastro, matchmaking público ou espectadores nesta versão.
+
+### Render
+
+Depois de incorporar este PR à `main`, crie um **Web Service** ligado ao repositório ou use o Blueprint `render.yaml`. Uma hospedagem de site estático executa somente o modo IA.
+
+| Configuração | Valor |
+| --- | --- |
+| Runtime | Python |
+| Branch | `main` (ou `feat/online-multiplayer` para testar o PR) |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `gunicorn --workers 1 --threads 40 --timeout 120 --bind 0.0.0.0:$PORT server:app` |
+| Health Check | `/health` |
+| `SECRET_KEY` | Valor aleatório gerado pelo serviço |
+| `PYTHON_VERSION` | `3.12.10` |
+| `ROOM_TTL_SECONDS` | `7200` |
+
+Use uma instância com **um worker**: as salas estão em memória. Mais workers ou réplicas exigem armazenamento compartilhado e uma arquitetura de sincronização apropriada; não basta aumentar `--workers`. Deploys, reinícios ou suspensão do serviço encerram as salas. Após publicar, duas pessoas devem abrir o mesmo endereço HTTPS do Render. CORS continua restrito à mesma origem.
+
+Referências: [Render Flask](https://render.com/docs/deploy-flask), [Flask-SocketIO deployment](https://flask-socketio.readthedocs.io/en/latest/deployment.html).
+
+### Testes online
+
+```bash
+node --test tests/*.cjs
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+São nove testes JavaScript (lógica local e adaptador online com DOM simulado) e oito testes Python com clientes Socket.IO de integração. Cobrem 150 partidas contra IA e 50 partidas online, sala cheia, privacidade, jogadas inválidas, revisões antigas, desconexão, reconexão, revanche, expiração e arquivos públicos permitidos.
+
+Teste opcional em Linux/Termux com Gunicorn real, um cliente WebSocket e outro polling:
+
+```bash
+pip install 'python-socketio[client]'
+python tests/network_smoke.py
+```
+
+Validação de rede e testes automatizados concluídos. A revisão visual em navegador permanece pendente: o Chromium não pôde ser baixado neste ambiente. Antes de publicar, confira o convite em dois celulares, recuperação de conexão, controles de revanche e retorno ao modo IA.

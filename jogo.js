@@ -757,7 +757,7 @@ const UI = {
     const div = document.getElementById('mensagemJogo');
     const tipos = { info:'alert-info', success:'alert-success', danger:'alert-danger', warning:'alert-warning', secondary:'alert-secondary' };
     div.className = `alert ${tipos[tipo] || 'alert-info'} text-center py-2 mb-3`;
-    div.innerHTML = msg;
+    div.textContent = msg;
   },
 
   mostrarBotoesAcao() {
