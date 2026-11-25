@@ -27,7 +27,13 @@ Acesse http://localhost:8080. Em outro dispositivo na mesma rede, use o IP do co
 3. Quando não há encaixe, compre uma peça ou passe a vez. Esta variante permite passar mesmo com reserva disponível.
 4. Vence quem esvazia a mão. Se ninguém pode jogar e a reserva acaba, vence a menor soma dos pontos; somas iguais resultam em empate.
 
-Fácil escolhe aleatoriamente; médio prioriza peças de soma intermediária; difícil descarta primeiro as peças com maior soma. A IA não utiliza um serviço de aprendizado de máquina.
+A estratégia fica em `IA` (`jogo.js`), em funções puras e testáveis. Nenhum nível usa aprendizado de máquina:
+
+- **Fácil**: escolhe uma jogada válida ao acaso.
+- **Médio**: pontua cada jogada (descartar pontos, soltar duplos, manter continuidade na própria mão) com ruído, e joga ao acaso em 30% dos turnos.
+- **Difícil**: usa a mesma pontuação, sem ruído, e acrescenta contagem de peças (cada número tem sete peças; ela sabe quantas ainda estão com você ou na reserva), valoriza deixar pontas "mortas" e lembra quais números você não tinha quando comprou ou passou.
+
+`node tools/bench_ia.cjs` simula partidas entre níveis. Em 6.000 partidas por confronto, o difícil venceu ~72% contra o fácil e ~64% contra o médio; difícil contra difícil ficou em ~50%.
 
 ## Decisão sobre TypeScript
 
@@ -39,6 +45,8 @@ O aplicativo tem três arquivos principais e não usa framework ou bundler. Foi 
 - `estilo.css`: tokens visuais, mesa, peças e breakpoints.
 - `jogo.js`: regras, IA, áudio e persistência local.
 - `tests/game.test.cjs`: testes de regressão da lógica, sem dependências.
+- `tests/ia.test.cjs`: testes da estratégia da IA. `tests/ui.test.cjs`: rolagem automática da mesa. `tools/bench_ia.cjs`: benchmark opcional entre níveis.
+- `.github/workflows/ci.yml`: roda sintaxe, testes JS e Python e o teste de rede a cada push e pull request.
 
 ## Validação
 
@@ -104,7 +112,7 @@ node --test tests/*.cjs
 python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-São nove testes JavaScript (lógica local e adaptador online com DOM simulado) e oito testes Python com clientes Socket.IO de integração. Cobrem 150 partidas contra IA e 50 partidas online, sala cheia, privacidade, jogadas inválidas, revisões antigas, desconexão, reconexão, revanche, expiração e arquivos públicos permitidos.
+São vinte e quatro testes JavaScript (lógica local, estratégia da IA, rolagem da mesa e adaptador online com DOM simulado) e oito testes Python com clientes Socket.IO de integração. Cobrem 150 partidas contra IA e 50 partidas online, sala cheia, privacidade, jogadas inválidas, revisões antigas, desconexão, reconexão, revanche, expiração e arquivos públicos permitidos.
 
 Teste opcional em Linux/Termux com Gunicorn real, um cliente WebSocket e outro polling:
 

@@ -75,6 +75,7 @@ const Utils = {
     const div = document.createElement(classe.includes('domino-tabuleiro') ? 'div' : 'button');
     if (div.tagName === 'BUTTON') div.type = 'button';
     div.setAttribute('aria-label', `Peça ${peca[0]} e ${peca[1]}`);
+    if (div.tagName !== 'BUTTON') div.setAttribute('role', 'img');
     div.className = 'domino-peca nova-peca' + (horizontal ? ' horizontal' : '') + (classe ? ' ' + classe : '');
     div.appendChild(this.criarFaceSVG(peca[0]));
 
@@ -317,7 +318,7 @@ const Conta = {
   },
   atualizarUI() {
     document.getElementById('userNameDisplay').textContent = this.nome;
-    document.getElementById('moedasDisplay').innerHTML = `<i class="fas fa-coins"></i> ${this.moedas}`;
+    document.getElementById('moedasDisplay').innerHTML = `<span aria-hidden="true">◎</span> ${this.moedas}<span class="sr-only"> moedas</span>`;
     if (this.premium) {
       document.getElementById('premiumBadge').classList.remove('d-none');
       document.getElementById('anuncioSimulado').classList.add('d-none');
@@ -706,7 +707,7 @@ const UI = {
     const div = document.getElementById('maoJogador');
     div.innerHTML = '';
     if (!Game.maoJogador.length) {
-      div.innerHTML = '<em class="text-muted">Sem peças!</em>';
+      div.innerHTML = '<span class="hand-empty">Sem peças!</span>';
       return;
     }
     Game.maoJogador.forEach((peca, i) => {
@@ -749,7 +750,7 @@ const UI = {
     if (Game.tabuleiro.length === 0) {
       document.getElementById('botoesJogar').classList.remove('d-none');
       document.getElementById('botoesJogar').classList.add('d-flex');
-      document.getElementById('btnEsquerda').innerHTML = `<i class="fas fa-play me-1"></i>Jogar`;
+      document.getElementById('btnEsquerda').textContent = 'Jogar';
       document.getElementById('btnDireita').classList.add('d-none');
       document.getElementById('dicaSelecao').textContent = `Peça [${peca[0]}|${peca[1]}] selecionada`;
     } else {
@@ -764,8 +765,8 @@ const UI = {
 
       document.getElementById('botoesJogar').classList.remove('d-none');
       document.getElementById('botoesJogar').classList.add('d-flex');
-      document.getElementById('btnEsquerda').innerHTML = `<i class="fas fa-arrow-left me-1"></i>Esquerda (${Game.extremidades[0]})`;
-      document.getElementById('btnDireita').innerHTML = `Direita (${Game.extremidades[1]}) <i class="fas fa-arrow-right ms-1"></i>`;
+      document.getElementById('btnEsquerda').textContent = `← Esquerda (${Game.extremidades[0]})`;
+      document.getElementById('btnDireita').textContent = `Direita (${Game.extremidades[1]}) →`;
       document.getElementById('btnEsquerda').classList.toggle('d-none', !podEsq);
       document.getElementById('btnDireita').classList.toggle('d-none', !podDir);
       document.getElementById('dicaSelecao').textContent = `Peça [${peca[0]}|${peca[1]}] selecionada`;
@@ -774,15 +775,44 @@ const UI = {
 
   renderizarTabuleiro() {
     const div = document.getElementById('tabuleiro');
+    const anterior = this.tabuleiroRenderizado || [];
     div.innerHTML = '';
     if (!Game.tabuleiro.length) {
       div.innerHTML = '<div class="tabuleiro-empty"><span class="empty-symbol" aria-hidden="true">⠿</span><strong>Sua jogada abre a mesa.</strong><span>Selecione uma peça e toque em Jogar.</span></div>';
+      this.tabuleiroRenderizado = [];
+      div.scrollLeft = 0;
       return;
     }
     Game.tabuleiro.forEach(peca => {
       const el = Utils.criarElementoPeca(peca, true, 'domino-tabuleiro');
       div.appendChild(el);
     });
+    this.tabuleiroRenderizado = Game.tabuleiro.map(p => [...p]);
+    this.rolarParaNovaPeca(div, anterior, Game.tabuleiro);
+  },
+
+  // Qual ponta recebeu a peça nova? null quando a mesa não cresceu exatamente uma peça.
+  ladoDaNovaPeca(anterior, atual) {
+    if (atual.length !== anterior.length + 1) return null;
+    if (!anterior.length) return 'direita';
+    return anterior[0].join(',') === atual[1].join(',') ? 'esquerda' : 'direita';
+  },
+
+  // Mantém a última peça jogada visível. Re-renderizações sem mudança não mexem na rolagem do usuário.
+  rolarParaNovaPeca(div, anterior, atual) {
+    if (typeof div.scrollTo !== 'function' || atual.length === anterior.length) return;
+    const reduzido = typeof window !== 'undefined' && window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior = reduzido ? 'auto' : 'smooth';
+    const lado = this.ladoDaNovaPeca(anterior, atual);
+    const alvo = lado && div.children[lado === 'esquerda' ? 0 : atual.length - 1];
+    if (alvo && alvo.getBoundingClientRect) {
+      const a = alvo.getBoundingClientRect(), c = div.getBoundingClientRect();
+      div.scrollTo({ left: div.scrollLeft + (a.left - c.left) - (div.clientWidth - a.width) / 2, behavior });
+    } else {
+      // Mesa restaurada ou reiniciada de uma vez: centraliza.
+      div.scrollTo({ left: Math.max(0, (div.scrollWidth - div.clientWidth) / 2), behavior: 'auto' });
+    }
   },
 
   atualizarInfo() {
@@ -795,14 +825,14 @@ const UI = {
   atualizarIndicadorTurno() {
     const el = document.getElementById('indicadorTurno');
     el.innerHTML = Game.vezDoJogador
-      ? `<span class="dot-turno ativo me-1"></span>Sua vez`
-      : `<span class="dot-turno inativo me-1"></span>Vez da IA`;
+      ? `<span class="dot-turno ativo"></span>Sua vez`
+      : `<span class="dot-turno inativo"></span>Vez da IA`;
   },
 
   setMensagem(tipo, msg) {
     const div = document.getElementById('mensagemJogo');
-    const tipos = { info:'alert-info', success:'alert-success', danger:'alert-danger', warning:'alert-warning', secondary:'alert-secondary' };
-    div.className = `alert ${tipos[tipo] || 'alert-info'} text-center py-2 mb-3`;
+    const tipos = { info:'', success:'alert-success', danger:'alert-danger', warning:'alert-warning', secondary:'alert-secondary' };
+    div.className = `alert ${tipos[tipo] ?? ''}`.trim();
     div.textContent = msg;
   },
 
@@ -839,8 +869,8 @@ const UI = {
 
   mostrarToast(msg, tipo) {
     const t = document.getElementById('toastResultado');
-    const cores = { success:'alert-success', danger:'alert-danger', warning:'alert-warning', info:'alert-info' };
-    t.className = `alert ${cores[tipo] || 'alert-info'} mb-0`;
+    const cores = { success:'alert-success', danger:'alert-danger', warning:'alert-warning', info:'' };
+    t.className = `alert ${cores[tipo] ?? ''}`.trim();
     t.innerHTML = msg;
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 3200);

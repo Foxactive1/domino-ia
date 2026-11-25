@@ -181,7 +181,10 @@ window.addEventListener('load', () => {
     await Online.connect();
     if (Online.session) await Online.ack('join_game', Online.session);
   }));
-  document.getElementById('btnLeaveRoom').addEventListener('click', () => Online.run(() => Online.leave()));
+  document.getElementById('btnLeaveRoom').addEventListener('click', () => {
+    if (!confirm('Sair encerra a sala para os dois jogadores. Deseja sair?')) return;
+    Online.run(() => Online.leave());
+  });
   document.getElementById('btnCopyInvite').addEventListener('click', () => Online.run(async () => {
     const url = new URL(location.href); url.search = ''; url.searchParams.set('room', Online.state.roomCode);
     try { await navigator.clipboard.writeText(url.href); UI.mostrarToast('Convite copiado!', 'success'); }

@@ -1,0 +1,764 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..8a6bd21
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,50 @@
++name: CI
++
++on:
++  push:
++    branches: [main]
++  pull_request:
++
++permissions:
++  contents: read
++
++concurrency:
++  group: ci-${{ github.ref }}
++  cancel-in-progress: true
++
++jobs:
++  javascript:
++    name: JavaScript (sintaxe + testes)
++    runs-on: ubuntu-latest
++    timeout-minutes: 10
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with:
++          node-version: 20
++      - name: Verificar sintaxe
++        run: |
++          node --check jogo.js
++          node --check online.js
++      - name: Testes (lógica local, IA e cliente online)
++        run: node --test tests/*.cjs
++
++  python:
++    name: Python (testes + rede real)
++    runs-on: ubuntu-latest
++    timeout-minutes: 10
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-python@v5
++        with:
++          python-version: '3.12'
++          cache: pip
++          cache-dependency-path: requirements.txt
++      - name: Instalar dependências
++        run: |
++          pip install -r requirements.txt
++          pip install 'python-socketio[client]'
++      - name: Testes do servidor
++        run: python -m unittest discover -s tests -p 'test_*.py' -v
++      - name: Teste de rede (Gunicorn real, WebSocket e polling)
++        run: python tests/network_smoke.py
+diff --git a/README.md b/README.md
+index 9b1b439..79b72e8 100644
+--- a/README.md
++++ b/README.md
+@@ -27,7 +27,13 @@ Acesse http://localhost:8080. Em outro dispositivo na mesma rede, use o IP do co
+ 3. Quando não há encaixe, compre uma peça ou passe a vez. Esta variante permite passar mesmo com reserva disponível.
+ 4. Vence quem esvazia a mão. Se ninguém pode jogar e a reserva acaba, vence a menor soma dos pontos; somas iguais resultam em empate.
+ 
+-Fácil escolhe aleatoriamente; médio prioriza peças de soma intermediária; difícil descarta primeiro as peças com maior soma. A IA não utiliza um serviço de aprendizado de máquina.
++A estratégia fica em `IA` (`jogo.js`), em funções puras e testáveis. Nenhum nível usa aprendizado de máquina:
++
++- **Fácil**: escolhe uma jogada válida ao acaso.
++- **Médio**: pontua cada jogada (descartar pontos, soltar duplos, manter continuidade na própria mão) com ruído, e joga ao acaso em 30% dos turnos.
++- **Difícil**: usa a mesma pontuação, sem ruído, e acrescenta contagem de peças (cada número tem sete peças; ela sabe quantas ainda estão com você ou na reserva), valoriza deixar pontas "mortas" e lembra quais números você não tinha quando comprou ou passou.
++
++`node tools/bench_ia.cjs` simula partidas entre níveis. Em 6.000 partidas por confronto, o difícil venceu ~72% contra o fácil e ~64% contra o médio; difícil contra difícil ficou em ~50%.
+ 
+ ## Decisão sobre TypeScript
+ 
+@@ -39,6 +45,8 @@ O aplicativo tem três arquivos principais e não usa framework ou bundler. Foi
+ - `estilo.css`: tokens visuais, mesa, peças e breakpoints.
+ - `jogo.js`: regras, IA, áudio e persistência local.
+ - `tests/game.test.cjs`: testes de regressão da lógica, sem dependências.
++- `tests/ia.test.cjs`: testes da estratégia da IA. `tests/ui.test.cjs`: rolagem automática da mesa. `tools/bench_ia.cjs`: benchmark opcional entre níveis.
++- `.github/workflows/ci.yml`: roda sintaxe, testes JS e Python e o teste de rede a cada push e pull request.
+ 
+ ## Validação
+ 
+@@ -104,7 +112,7 @@ node --test tests/*.cjs
+ python -m unittest discover -s tests -p 'test_*.py' -v
+ ```
+ 
+-São nove testes JavaScript (lógica local e adaptador online com DOM simulado) e oito testes Python com clientes Socket.IO de integração. Cobrem 150 partidas contra IA e 50 partidas online, sala cheia, privacidade, jogadas inválidas, revisões antigas, desconexão, reconexão, revanche, expiração e arquivos públicos permitidos.
++São vinte e quatro testes JavaScript (lógica local, estratégia da IA, rolagem da mesa e adaptador online com DOM simulado) e oito testes Python com clientes Socket.IO de integração. Cobrem 150 partidas contra IA e 50 partidas online, sala cheia, privacidade, jogadas inválidas, revisões antigas, desconexão, reconexão, revanche, expiração e arquivos públicos permitidos.
+ 
+ Teste opcional em Linux/Termux com Gunicorn real, um cliente WebSocket e outro polling:
+ 
+diff --git a/estilo.css b/estilo.css
+index 8e800ef..a5e7d52 100644
+--- a/estilo.css
++++ b/estilo.css
+@@ -80,7 +80,7 @@ a {
+ .brand small {
+   display:block;
+   letter-spacing:1px;
+-  font-size:9px;
++  font-size:11px;
+   color:var(--muted);
+   font-weight:400;
+   margin-top:5px
+@@ -136,7 +136,7 @@ a {
+   margin-bottom:34px
+ }
+ .eyebrow {
+-  font-size:10px;
++  font-size:11px;
+   letter-spacing:2px;
+   font-weight:600;
+   color:var(--gold)
+@@ -158,7 +158,7 @@ h1 em {
+   font-size:13px
+ }
+ .session-label {
+-  font-size:11px;
++  font-size:12px;
+   color:var(--muted);
+   white-space:nowrap
+ }
+@@ -182,7 +182,7 @@ h1 em {
+ }
+ .tag {
+   display:inline-block;
+-  font-size:9px;
++  font-size:11px;
+   letter-spacing:1px;
+   color:var(--gold);
+   border:1px solid #655e40;
+@@ -243,7 +243,7 @@ select {
+ .opponent small {
+   display:block;
+   color:#bccfbc;
+-  font-size:11px
++  font-size:12px
+ }
+ .ai-avatar {
+   width:36px;
+@@ -264,7 +264,7 @@ select {
+   gap:12px;
+   padding:16px 26px;
+   color:#bed0bd;
+-  font-size:11px
++  font-size:12px
+ }
+ .board-caption strong {
+   color:var(--gold);
+@@ -302,7 +302,7 @@ select {
+ }
+ .table-bottom {
+   border-top:1px solid #b8d7a516;
+-  font-size:9px;
++  font-size:11px;
+   letter-spacing:1px
+ }
+ .table-bottom strong {
+@@ -347,7 +347,7 @@ select {
+   margin:4px 0
+ }
+ .section-heading small {
+-  font-size:11px;
++  font-size:12px;
+   color:var(--gold);
+   text-align:right
+ }
+@@ -390,7 +390,7 @@ select {
+ }
+ .panel-description {
+   margin-top:7px;
+-  font-size:11px
++  font-size:12px
+ }
+ .text-button {
+   color:var(--muted);
+@@ -398,7 +398,7 @@ select {
+   border:0;
+   min-height:44px;
+   padding:0 4px;
+-  font-size:11px
++  font-size:12px
+ }
+ .score-grid {
+   display:grid;
+@@ -416,7 +416,7 @@ select {
+   color:var(--accent)
+ }
+ .score-grid small {
+-  font-size:10px;
++  font-size:11px;
+   color:var(--muted)
+ }
+ .muted {
+@@ -430,7 +430,7 @@ select {
+   padding-top:14px;
+   display:flex;
+   justify-content:space-between;
+-  font-size:11px;
++  font-size:12px;
+   color:var(--muted)
+ }
+ .total-row strong {
+@@ -446,7 +446,7 @@ select {
+   margin:20px 0
+ }
+ .guide li {
+-  font-size:11px;
++  font-size:12px;
+   color:#c9d5c8;
+   display:flex;
+   align-items:center;
+@@ -454,7 +454,7 @@ select {
+   margin:14px 0
+ }
+ .guide li span {
+-  font-size:10px;
++  font-size:11px;
+   color:var(--gold);
+   border:1px solid #586044;
+   border-radius:50%;
+@@ -466,18 +466,18 @@ select {
+ }
+ .guide p {
+   color:var(--muted);
+-  font-size:11px
++  font-size:12px
+ }
+ .history-panel h2 {
+   font-size:13px
+ }
+ .live-label {
+-  font-size:8px;
++  font-size:11px;
+   letter-spacing:1px;
+   color:var(--accent)
+ }
+ #historicoJogo {
+-  font-size:11px;
++  font-size:12px;
+   line-height:1.9;
+   color:var(--muted);
+   margin-top:10px;
+@@ -498,11 +498,11 @@ select {
+   font-size:26px
+ }
+ .shop-link strong {
+-  font-size:11px;
++  font-size:12px;
+   display:block
+ }
+ .shop-link small {
+-  font-size:10px;
++  font-size:11px;
+   color:var(--muted)
+ }
+ .reward-button {
+@@ -511,7 +511,7 @@ select {
+   border:1px solid var(--border);
+   border-radius:8px;
+   padding:12px;
+-  font-size:11px
++  font-size:12px
+ }
+ footer {
+   display:flex;
+@@ -521,7 +521,7 @@ footer {
+   margin-top:32px;
+   border-top:1px solid var(--border);
+   color:var(--muted);
+-  font-size:10px
++  font-size:11px
+ }
+ dialog {
+   width:min(480px,calc(100% - 32px));
+@@ -637,8 +637,6 @@ dialog input[type=range] {
+ 
+   height: 96px;
+ 
+-  background: linear-gradient(145deg, #fdf6e3 0%, #f0e0b8 40%, #ede0c4 70%, #e8d5a3 100%);
+-
+   border: none;
+ 
+   border-radius: 8px;
+@@ -651,9 +649,6 @@ dialog input[type=range] {
+ 
+   position: relative;
+ 
+-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(0,0,0,0.15),
+-              2px 4px 0px #8a6a3a, 3px 6px 10px rgba(0,0,0,0.55);
+-
+   user-select: none;
+ 
+   outline: 2px solid #7a5230;
+@@ -693,19 +688,6 @@ dialog input[type=range] {
+ }
+ 
+ 
+-.domino-peca.selecionada  {
+-
+-  transform: translateY(-14px) scale(1.13) rotate(0deg);
+-
+-  outline: 2.5px solid #00e5ff;
+-
+-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 0 0 4px rgba(0,229,255,0.35),
+-              4px 12px 2px #6b4e20, 5px 18px 24px rgba(0,229,255,0.3);
+-
+-
+-}
+-
+-
+ .domino-peca.horizontal  {
+ 
+   flex-direction: row;
+@@ -720,8 +702,6 @@ dialog input[type=range] {
+ 
+ .domino-peca.bloqueada  {
+ 
+-  filter: saturate(0.3) brightness(0.7);
+-
+   cursor: not-allowed;
+ 
+ 
+@@ -738,10 +718,7 @@ dialog input[type=range] {
+ 
+   transform: none !important;
+ 
+-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 1px 3px 0px #7a5a2a, 2px 5px 8px rgba(0,0,0,0.5) !important;
+-
+-
+-}
++  }
+ 
+ 
+ .domino-peca.domino-tabuleiro.horizontal  {
+@@ -930,13 +907,13 @@ dialog input[type=range] {
+   .profile-button {
+     max-width:112px;
+     padding:6px 8px;
+-    font-size:11px
++    font-size:12px
+   }
+   .profile-button .avatar {
+     display:none
+   }
+   .coins {
+-    font-size:11px
++    font-size:12px
+   }
+   .icon-button {
+     padding:8px 11px
+@@ -978,7 +955,7 @@ dialog input[type=range] {
+     font-size:22px
+   }
+   .tabuleiro-empty span:last-child {
+-    font-size:11px
++    font-size:12px
+   }
+   .hand-panel {
+     padding:18px 14px
+@@ -1048,3 +1025,6 @@ dialog input[type=range] {
+ #roomCodeDisplay { letter-spacing: 3px; color: var(--gold); }
+ button:disabled, select:disabled { opacity: .5; }
+ @media (max-width: 520px) { .online-controls, .join-room { width: 100%; } .join-room input { flex: 1; } }
++
++/* A fila da mesa rola na horizontal: precisa ser alcançável pelo teclado. */
++#tabuleiro:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px; }
+diff --git a/index.html b/index.html
+index daf75ea..f5992d5 100644
+--- a/index.html
++++ b/index.html
+@@ -86,7 +86,7 @@
+ <span>Extremidades <strong id="extremidadesInfo">— | —</strong>
+ </span>
+ </div>
+-<div id="tabuleiro" aria-label="Peças da mesa">
++<div id="tabuleiro" role="group" aria-label="Peças da mesa" tabindex="0">
+ <div class="tabuleiro-empty">
+ <span class="empty-symbol" aria-hidden="true">⠿</span>
+ <strong>A mesa está pronta.</strong>
+@@ -100,7 +100,7 @@
+ <span>Reserva <strong id="contadorEstoque">0</strong> peças</span>
+ </div>
+ </div>
+-<div id="mensagemJogo" class="alert alert-info" role="status" aria-live="polite">Sua próxima partida começa em “Nova partida”.</div>
++<div id="mensagemJogo" class="alert" role="status" aria-live="polite">Sua próxima partida começa em “Nova partida”.</div>
+ <section class="hand-panel" aria-label="Sua mão">
+ <div class="section-heading">
+ <div>
+@@ -119,7 +119,7 @@
+ </div>
+ <div class="move-actions">
+ <button id="btnComprar" class="btn btn-outline-warning d-none">＋ Comprar peça</button>
+-<button id="btnPassar" class="btn btn-outline-secondary d-none">Passar vez →</button>
++<button id="btnPassar" class="btn d-none">Passar vez →</button>
+ </div>
+ </section>
+ </section>
+diff --git a/jogo.js b/jogo.js
+index 9b28b9a..123465a 100644
+--- a/jogo.js
++++ b/jogo.js
+@@ -75,6 +75,7 @@ const Utils = {
+     const div = document.createElement(classe.includes('domino-tabuleiro') ? 'div' : 'button');
+     if (div.tagName === 'BUTTON') div.type = 'button';
+     div.setAttribute('aria-label', `Peça ${peca[0]} e ${peca[1]}`);
++    if (div.tagName !== 'BUTTON') div.setAttribute('role', 'img');
+     div.className = 'domino-peca nova-peca' + (horizontal ? ' horizontal' : '') + (classe ? ' ' + classe : '');
+     div.appendChild(this.criarFaceSVG(peca[0]));
+ 
+@@ -317,7 +318,7 @@ const Conta = {
+   },
+   atualizarUI() {
+     document.getElementById('userNameDisplay').textContent = this.nome;
+-    document.getElementById('moedasDisplay').innerHTML = `<i class="fas fa-coins"></i> ${this.moedas}`;
++    document.getElementById('moedasDisplay').innerHTML = `<span aria-hidden="true">◎</span> ${this.moedas}<span class="sr-only"> moedas</span>`;
+     if (this.premium) {
+       document.getElementById('premiumBadge').classList.remove('d-none');
+       document.getElementById('anuncioSimulado').classList.add('d-none');
+@@ -706,7 +707,7 @@ const UI = {
+     const div = document.getElementById('maoJogador');
+     div.innerHTML = '';
+     if (!Game.maoJogador.length) {
+-      div.innerHTML = '<em class="text-muted">Sem peças!</em>';
++      div.innerHTML = '<span class="hand-empty">Sem peças!</span>';
+       return;
+     }
+     Game.maoJogador.forEach((peca, i) => {
+@@ -749,7 +750,7 @@ const UI = {
+     if (Game.tabuleiro.length === 0) {
+       document.getElementById('botoesJogar').classList.remove('d-none');
+       document.getElementById('botoesJogar').classList.add('d-flex');
+-      document.getElementById('btnEsquerda').innerHTML = `<i class="fas fa-play me-1"></i>Jogar`;
++      document.getElementById('btnEsquerda').textContent = 'Jogar';
+       document.getElementById('btnDireita').classList.add('d-none');
+       document.getElementById('dicaSelecao').textContent = `Peça [${peca[0]}|${peca[1]}] selecionada`;
+     } else {
+@@ -764,8 +765,8 @@ const UI = {
+ 
+       document.getElementById('botoesJogar').classList.remove('d-none');
+       document.getElementById('botoesJogar').classList.add('d-flex');
+-      document.getElementById('btnEsquerda').innerHTML = `<i class="fas fa-arrow-left me-1"></i>Esquerda (${Game.extremidades[0]})`;
+-      document.getElementById('btnDireita').innerHTML = `Direita (${Game.extremidades[1]}) <i class="fas fa-arrow-right ms-1"></i>`;
++      document.getElementById('btnEsquerda').textContent = `← Esquerda (${Game.extremidades[0]})`;
++      document.getElementById('btnDireita').textContent = `Direita (${Game.extremidades[1]}) →`;
+       document.getElementById('btnEsquerda').classList.toggle('d-none', !podEsq);
+       document.getElementById('btnDireita').classList.toggle('d-none', !podDir);
+       document.getElementById('dicaSelecao').textContent = `Peça [${peca[0]}|${peca[1]}] selecionada`;
+@@ -774,15 +775,44 @@ const UI = {
+ 
+   renderizarTabuleiro() {
+     const div = document.getElementById('tabuleiro');
++    const anterior = this.tabuleiroRenderizado || [];
+     div.innerHTML = '';
+     if (!Game.tabuleiro.length) {
+       div.innerHTML = '<div class="tabuleiro-empty"><span class="empty-symbol" aria-hidden="true">⠿</span><strong>Sua jogada abre a mesa.</strong><span>Selecione uma peça e toque em Jogar.</span></div>';
++      this.tabuleiroRenderizado = [];
++      div.scrollLeft = 0;
+       return;
+     }
+     Game.tabuleiro.forEach(peca => {
+       const el = Utils.criarElementoPeca(peca, true, 'domino-tabuleiro');
+       div.appendChild(el);
+     });
++    this.tabuleiroRenderizado = Game.tabuleiro.map(p => [...p]);
++    this.rolarParaNovaPeca(div, anterior, Game.tabuleiro);
++  },
++
++  // Qual ponta recebeu a peça nova? null quando a mesa não cresceu exatamente uma peça.
++  ladoDaNovaPeca(anterior, atual) {
++    if (atual.length !== anterior.length + 1) return null;
++    if (!anterior.length) return 'direita';
++    return anterior[0].join(',') === atual[1].join(',') ? 'esquerda' : 'direita';
++  },
++
++  // Mantém a última peça jogada visível. Re-renderizações sem mudança não mexem na rolagem do usuário.
++  rolarParaNovaPeca(div, anterior, atual) {
++    if (typeof div.scrollTo !== 'function' || atual.length === anterior.length) return;
++    const reduzido = typeof window !== 'undefined' && window.matchMedia &&
++      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
++    const behavior = reduzido ? 'auto' : 'smooth';
++    const lado = this.ladoDaNovaPeca(anterior, atual);
++    const alvo = lado && div.children[lado === 'esquerda' ? 0 : atual.length - 1];
++    if (alvo && alvo.getBoundingClientRect) {
++      const a = alvo.getBoundingClientRect(), c = div.getBoundingClientRect();
++      div.scrollTo({ left: div.scrollLeft + (a.left - c.left) - (div.clientWidth - a.width) / 2, behavior });
++    } else {
++      // Mesa restaurada ou reiniciada de uma vez: centraliza.
++      div.scrollTo({ left: Math.max(0, (div.scrollWidth - div.clientWidth) / 2), behavior: 'auto' });
++    }
+   },
+ 
+   atualizarInfo() {
+@@ -795,14 +825,14 @@ const UI = {
+   atualizarIndicadorTurno() {
+     const el = document.getElementById('indicadorTurno');
+     el.innerHTML = Game.vezDoJogador
+-      ? `<span class="dot-turno ativo me-1"></span>Sua vez`
+-      : `<span class="dot-turno inativo me-1"></span>Vez da IA`;
++      ? `<span class="dot-turno ativo"></span>Sua vez`
++      : `<span class="dot-turno inativo"></span>Vez da IA`;
+   },
+ 
+   setMensagem(tipo, msg) {
+     const div = document.getElementById('mensagemJogo');
+-    const tipos = { info:'alert-info', success:'alert-success', danger:'alert-danger', warning:'alert-warning', secondary:'alert-secondary' };
+-    div.className = `alert ${tipos[tipo] || 'alert-info'} text-center py-2 mb-3`;
++    const tipos = { info:'', success:'alert-success', danger:'alert-danger', warning:'alert-warning', secondary:'alert-secondary' };
++    div.className = `alert ${tipos[tipo] ?? ''}`.trim();
+     div.textContent = msg;
+   },
+ 
+@@ -839,8 +869,8 @@ const UI = {
+ 
+   mostrarToast(msg, tipo) {
+     const t = document.getElementById('toastResultado');
+-    const cores = { success:'alert-success', danger:'alert-danger', warning:'alert-warning', info:'alert-info' };
+-    t.className = `alert ${cores[tipo] || 'alert-info'} mb-0`;
++    const cores = { success:'alert-success', danger:'alert-danger', warning:'alert-warning', info:'' };
++    t.className = `alert ${cores[tipo] ?? ''}`.trim();
+     t.innerHTML = msg;
+     t.classList.add('show');
+     setTimeout(() => t.classList.remove('show'), 3200);
+@@ -892,4 +922,4 @@ window.addEventListener('load', () => {
+       document.getElementById('anuncioSimulado').classList.add('d-none');
+     }
+   }, 30000);
+-});
++});
+\ No newline at end of file
+diff --git a/online.js b/online.js
+index cdc8ea2..b6abdc8 100644
+--- a/online.js
++++ b/online.js
+@@ -181,7 +181,10 @@ window.addEventListener('load', () => {
+     await Online.connect();
+     if (Online.session) await Online.ack('join_game', Online.session);
+   }));
+-  document.getElementById('btnLeaveRoom').addEventListener('click', () => Online.run(() => Online.leave()));
++  document.getElementById('btnLeaveRoom').addEventListener('click', () => {
++    if (!confirm('Sair encerra a sala para os dois jogadores. Deseja sair?')) return;
++    Online.run(() => Online.leave());
++  });
+   document.getElementById('btnCopyInvite').addEventListener('click', () => Online.run(async () => {
+     const url = new URL(location.href); url.search = ''; url.searchParams.set('room', Online.state.roomCode);
+     try { await navigator.clipboard.writeText(url.href); UI.mostrarToast('Convite copiado!', 'success'); }
+diff --git a/tests/ia.test.cjs b/tests/ia.test.cjs
+new file mode 100644
+index 0000000..a739026
+--- /dev/null
++++ b/tests/ia.test.cjs
+@@ -0,0 +1,70 @@
++// Run with node --test tests/ia.test.cjs; no dependencies required.
++const {test} = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const vm = require('node:vm');
++
++function loadIA() {
++  const context = vm.createContext({
++    console: {log() {}}, window: {addEventListener() {}}, document: {},
++    localStorage: {getItem() { return null; }, setItem() {}}
++  });
++  vm.runInContext(fs.readFileSync('jogo.js', 'utf8') + ';globalThis.api={IA,Game};', context);
++  return context.api;
++}
++const {IA, Game} = loadIA();
++const sem = (...n) => new Set(n);
++const plain = value => JSON.parse(JSON.stringify(value)); // atravessa o contexto do vm
++
++test('candidatos orienta a peça e calcula as pontas resultantes', () => {
++  const c = IA.candidatos([[1, 2]], [[1, 3]], [1, 3]);
++  assert.equal(c.length, 1);
++  assert.deepEqual(plain(c[0].peca), [2, 1]);
++  assert.equal(c[0].lado, 'esquerda');
++  assert.deepEqual(plain(c[0].pontas), [2, 3]);
++  const ambos = IA.candidatos([[3, 3]], [[3, 3]], [3, 3]);
++  assert.deepEqual(plain(ambos.map(x => x.lado)).sort(), ['direita', 'esquerda']);
++});
++
++test('desconhecidas conta as sete peças de cada número', () => {
++  assert.deepEqual(plain(IA.desconhecidas([], [])), Array(7).fill(7));
++  const u = IA.desconhecidas([[6, 6], [6, 1]], [[1, 1]]);
++  assert.equal(u[6], 5);   // [6,6] e [6,1] vistas
++  assert.equal(u[1], 5);   // [6,1] e [1,1] vistas
++  assert.equal(u[0], 7);
++});
++
++test('sem jogada possível devolve null', () => {
++  assert.equal(IA.escolher({mao: [[0, 0]], tabuleiro: [[5, 6]], extremidades: [5, 6], semNumeros: sem()}, 'hard'), null);
++});
++
++test('difícil explora o número que o adversário não tem', () => {
++  const ctx = {mao: [[3, 1], [5, 2], [1, 1]], tabuleiro: [[3, 5]], extremidades: [3, 5], semNumeros: sem(1)};
++  const escolha = IA.escolher(ctx, 'hard');
++  assert.deepEqual(plain(escolha.peca).sort(), [1, 3]);
++  assert.equal(escolha.pontas.includes(1), true);
++});
++
++test('difícil prefere deixar uma ponta morta (todas as peças do número já visíveis)', () => {
++  const tabuleiro = [[6, 0], [6, 1], [6, 2], [6, 4], [6, 5], [6, 6]];
++  const ctx = {mao: [[3, 6], [4, 4]], tabuleiro, extremidades: [3, 4], semNumeros: sem()};
++  const escolha = IA.escolher(ctx, 'hard');
++  assert.deepEqual(plain(escolha.peca), [6, 3]);
++  assert.deepEqual(plain(escolha.pontas), [6, 4]);
++});
++
++test('difícil é determinístico; fácil e médio aceitam rng injetado', () => {
++  const ctx = {mao: [[2, 3], [4, 5], [6, 6]], tabuleiro: [[3, 4]], extremidades: [3, 4], semNumeros: sem()};
++  const a = IA.escolher(ctx, 'hard'), b = IA.escolher(ctx, 'hard');
++  assert.deepEqual(plain(a), plain(b));
++  assert.ok(IA.escolher(ctx, 'easy', () => 0));
++  assert.ok(IA.escolher(ctx, 'medium', () => 0.9));
++});
++
++test('jogador que compra ou passa revela os números que não tinha', () => {
++  Game.tabuleiro = [[2, 5]]; Game.extremidades = [2, 5];
++  Game.estoque = [[0, 0], [1, 1]]; Game.maoJogador = [[4, 4]];
++  Game.vezDoJogador = true; Game.jogoAtivo = true; Game.semNumeros = new Set([6]);
++  try { Game.comprarPeca(); } catch { /* UI sem DOM neste teste */ }
++  assert.deepEqual([...Game.semNumeros].sort(), [2, 5]);   // compra substitui o conhecimento antigo
++});
+diff --git a/tests/ui.test.cjs b/tests/ui.test.cjs
+new file mode 100644
+index 0000000..39a1bde
+--- /dev/null
++++ b/tests/ui.test.cjs
+@@ -0,0 +1,80 @@
++// Run with node --test tests/ui.test.cjs; no dependencies required.
++const {test} = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const vm = require('node:vm');
++
++function load(windowExtras = {}) {
++  const context = vm.createContext({
++    console: {log() {}}, window: {addEventListener() {}, ...windowExtras}, document: {},
++    localStorage: {getItem() { return null; }, setItem() {}}
++  });
++  vm.runInContext(fs.readFileSync('jogo.js', 'utf8') + ';globalThis.api={UI};', context);
++  return context.api.UI;
++}
++const t = (...p) => p;
++const caixa = (left, width = 76) => ({getBoundingClientRect: () => ({left, width})});
++function mesa({scrollLeft = 100, clientWidth = 300, scrollWidth = 1000, left = 50, children = []} = {}) {
++  return {scrollLeft, clientWidth, scrollWidth, children, chamadas: [],
++    getBoundingClientRect: () => ({left}), scrollTo(opcoes) { this.chamadas.push(opcoes); }};
++}
++
++test('ladoDaNovaPeca identifica a ponta que recebeu a peça', () => {
++  const UI = load();
++  assert.equal(UI.ladoDaNovaPeca([], [t(3, 4)]), 'direita');
++  assert.equal(UI.ladoDaNovaPeca([t(3, 4)], [t(2, 3), t(3, 4)]), 'esquerda');
++  assert.equal(UI.ladoDaNovaPeca([t(3, 4)], [t(3, 4), t(4, 6)]), 'direita');
++  assert.equal(UI.ladoDaNovaPeca([t(1, 2), t(2, 5)], [t(0, 1), t(1, 2), t(2, 5)]), 'esquerda');
++  assert.equal(UI.ladoDaNovaPeca([t(1, 2), t(2, 5)], [t(1, 2), t(2, 5), t(5, 5)]), 'direita');
++  assert.equal(UI.ladoDaNovaPeca([t(3, 4)], [t(3, 4)]), null);                       // nada mudou
++  assert.equal(UI.ladoDaNovaPeca([t(3, 4)], [t(1, 3), t(3, 4), t(4, 6)]), null);     // saltou mais de uma peça
++});
++
++test('rola para centralizar a peça nova, na ponta direita', () => {
++  const UI = load();
++  const alvo = caixa(400);
++  const div = mesa({children: [caixa(0), caixa(200), alvo]});
++  UI.rolarParaNovaPeca(div, [t(1, 2), t(2, 3)], [t(1, 2), t(2, 3), t(3, 3)]);
++  assert.equal(div.chamadas.length, 1);
++  assert.equal(div.chamadas[0].left, 100 + (400 - 50) - (300 - 76) / 2);   // 338
++  assert.equal(div.chamadas[0].behavior, 'smooth');
++});
++
++test('na ponta esquerda usa a primeira peça da mesa', () => {
++  const UI = load();
++  const div = mesa({scrollLeft: 600, children: [caixa(60), caixa(140), caixa(220)]});
++  UI.rolarParaNovaPeca(div, [t(2, 3), t(3, 3)], [t(1, 2), t(2, 3), t(3, 3)]);
++  assert.equal(div.chamadas[0].left, 600 + (60 - 50) - (300 - 76) / 2);    // 498
++});
++
++test('re-render sem mudança não mexe na rolagem do usuário', () => {
++  const UI = load();
++  const div = mesa({children: [caixa(0), caixa(100)]});
++  UI.rolarParaNovaPeca(div, [t(1, 2), t(2, 3)], [t(1, 2), t(2, 3)]);
++  assert.equal(div.chamadas.length, 0);
++});
++
++test('mesa restaurada de uma vez é centralizada, sem animação', () => {
++  const UI = load();
++  const div = mesa({children: [caixa(0), caixa(100), caixa(200)]});
++  UI.rolarParaNovaPeca(div, [], [t(1, 2), t(2, 3), t(3, 4)]);
++  assert.deepEqual({...div.chamadas[0]}, {left: (1000 - 300) / 2, behavior: 'auto'});
++});
++
++test('movimento reduzido desliga a animação suave', () => {
++  const UI = load({matchMedia: () => ({matches: true})});
++  const div = mesa({children: [caixa(0), caixa(400)]});
++  UI.rolarParaNovaPeca(div, [t(1, 2)], [t(1, 2), t(2, 3)]);
++  assert.equal(div.chamadas[0].behavior, 'auto');
++});
++
++test('ambiente sem scrollTo (testes com DOM simulado) não quebra', () => {
++  const UI = load();
++  assert.doesNotThrow(() => UI.rolarParaNovaPeca({children: []}, [], [t(1, 2)]));
++});
++
++test('o HTML não depende de ícones ou utilitários inexistentes', () => {
++  const fontes = ['jogo.js', 'online.js', 'index.html'].map(f => fs.readFileSync(f, 'utf8')).join('\n');
++  for (const morta of ['fas fa-', 'text-center', 'text-muted', 'btn-outline-secondary', 'me-1', 'ms-1', 'mb-3', 'mb-0', 'py-2'])
++    assert.equal(fontes.includes(morta), false, `classe/ícone ausente do CSS ainda em uso: ${morta}`);
++});
+diff --git a/tools/bench_ia.cjs b/tools/bench_ia.cjs
+new file mode 100644
+index 0000000..a905d36
+--- /dev/null
++++ b/tools/bench_ia.cjs
+@@ -0,0 +1,48 @@
++// Benchmark opcional (não roda no CI): node tools/bench_ia.cjs [partidas]
++// Cada nível joga contra o outro com as mesmas regras, alternando quem começa.
++const fs = require('node:fs');
++const vm = require('node:vm');
++const context = vm.createContext({console: {log() {}}, window: {addEventListener() {}}, document: {}, localStorage: {getItem() { return null; }, setItem() {}}});
++vm.runInContext(fs.readFileSync('jogo.js', 'utf8') + ';globalThis.IA=IA;', context);
++const IA = context.IA;
++
++function embaralhar(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
++function partida(nivelA, nivelB, comecaA) {
++  const todas = []; for (let i = 0; i <= 6; i++) for (let j = i; j <= 6; j++) todas.push([i, j]);
++  embaralhar(todas);
++  const jog = [{nivel: nivelA, mao: todas.slice(0, 7), sem: new Set()}, {nivel: nivelB, mao: todas.slice(7, 14), sem: new Set()}];
++  const estoque = todas.slice(14); let tab = [], pontas = [null, null], vez = comecaA ? 0 : 1, passesSeguidos = 0;
++  while (true) {
++    const eu = jog[vez], rival = jog[1 - vez];
++    let escolha = IA.escolher({mao: eu.mao, tabuleiro: tab, extremidades: pontas, semNumeros: eu.sem}, eu.nivel);
++    while (!escolha && estoque.length) {
++      if (tab.length) rival.sem = new Set(pontas); // o adversário percebe que eu não tinha as pontas
++      eu.mao.push(estoque.pop());
++      escolha = IA.escolher({mao: eu.mao, tabuleiro: tab, extremidades: pontas, semNumeros: eu.sem}, eu.nivel);
++    }
++    if (escolha) {
++      eu.mao.splice(escolha.indice, 1);
++      if (!tab.length) { tab.push(escolha.peca); pontas = [escolha.peca[0], escolha.peca[1]]; }
++      else if (escolha.lado === 'esquerda') { tab.unshift(escolha.peca); pontas[0] = escolha.peca[0]; }
++      else { tab.push(escolha.peca); pontas[1] = escolha.peca[1]; }
++      passesSeguidos = 0;
++      if (!eu.mao.length) return vez;
++    } else {
++      pontas.forEach(n => rival.sem.add(n));
++      if (++passesSeguidos === 2) {
++        const soma = m => m.reduce((s, p) => s + p[0] + p[1], 0);
++        const a = soma(jog[0].mao), b = soma(jog[1].mao);
++        return a === b ? -1 : a < b ? 0 : 1;
++      }
++    }
++    vez = 1 - vez;
++  }
++}
++function confronto(a, b, n) {
++  let va = 0, vb = 0, e = 0;
++  for (let i = 0; i < n; i++) { const r = partida(a, b, i % 2 === 0); r === 0 ? va++ : r === 1 ? vb++ : e++; }
++  const pct = x => (100 * x / n).toFixed(1).padStart(5) + '%';
++  console.log(`${a.padEnd(6)} x ${b.padEnd(6)} → ${a}: ${pct(va)}  ${b}: ${pct(vb)}  empates: ${pct(e)}`);
++}
++const n = Number(process.argv[2]) || 4000;
++confronto('hard', 'easy', n); confronto('hard', 'medium', n); confronto('medium', 'easy', n); confronto('hard', 'hard', n);
