@@ -401,11 +401,75 @@ const Placar = {
   }
 };
 
+// ---------- ESTRATÉGIA DA IA ----------
+// Funções puras (sem DOM): recebem o contexto e devolvem a jogada escolhida.
+// Fácil: aleatória. Médio: heurística simples com ruído. Difícil: heurística completa
+// com contagem de peças (as 7 peças de cada número) e memória dos números que o
+// adversário não tinha quando passou ou comprou.
+const IA = {
+  candidatos(mao, tabuleiro, pontas) {
+    const lista = [];
+    mao.forEach((p, indice) => {
+      if (!tabuleiro.length) {
+        lista.push({ indice, peca: [p[0], p[1]], lado: 'direita', pontas: [p[0], p[1]] });
+        return;
+      }
+      if (p.includes(pontas[0])) {
+        const o = p[1] === pontas[0] ? [p[0], p[1]] : [p[1], p[0]];
+        lista.push({ indice, peca: o, lado: 'esquerda', pontas: [o[0], pontas[1]] });
+      }
+      if (p.includes(pontas[1])) {
+        const o = p[0] === pontas[1] ? [p[0], p[1]] : [p[1], p[0]];
+        lista.push({ indice, peca: o, lado: 'direita', pontas: [pontas[0], o[1]] });
+      }
+    });
+    return lista;
+  },
+
+  // Quantas peças de cada número ainda estão com o adversário ou na reserva.
+  desconhecidas(mao, tabuleiro) {
+    const vistas = Array(7).fill(0);
+    for (const [a, b] of [...mao, ...tabuleiro]) { vistas[a]++; if (b !== a) vistas[b]++; }
+    return vistas.map(n => 7 - n);
+  },
+
+  pontuar(c, ctx, dificuldade, desconhecidas) {
+    const restante = ctx.mao.filter((_, i) => i !== c.indice);
+    let s = (c.peca[0] + c.peca[1]) * 0.3;          // descarta pontos
+    if (c.peca[0] === c.peca[1]) s += 3;              // duplos são difíceis de encaixar depois
+    for (const n of c.pontas) s += 1.2 * restante.filter(p => p.includes(n)).length; // mantém continuidade
+    if (dificuldade === 'hard') {
+      for (const n of c.pontas) {
+        s -= 0.6 * desconhecidas[n];                  // menos opções para o adversário
+        if (desconhecidas[n] === 0) s += 3;           // ponta morta: ninguém mais tem esse número
+        if (ctx.semNumeros.has(n)) s += 4;            // adversário já mostrou que não tem
+      }
+    }
+    return s;
+  },
+
+  escolher(ctx, dificuldade, rng = Math.random) {
+    const lista = this.candidatos(ctx.mao, ctx.tabuleiro, ctx.extremidades);
+    if (!lista.length) return null;
+    if (dificuldade === 'easy' || (dificuldade === 'medium' && rng() < 0.3)) {
+      return lista[Math.floor(rng() * lista.length)];
+    }
+    const desconhecidas = this.desconhecidas(ctx.mao, ctx.tabuleiro);
+    let melhor = null, melhorPontos = -Infinity;
+    for (const c of lista) {
+      let pontos = this.pontuar(c, ctx, dificuldade, desconhecidas);
+      if (dificuldade === 'medium') pontos += rng() * 2;
+      if (pontos > melhorPontos) { melhor = c; melhorPontos = pontos; }
+    }
+    return melhor;
+  }
+};
+
 // ---------- LÓGICA DO JOGO ----------
 const Game = {
   maoJogador: [], maoIA: [], estoque: [], tabuleiro: [], extremidades: [null, null],
   vezDoJogador: true, pecaSelecionada: null, indexSelecionado: null, jogoAtivo: false,
-  historico: [], timerIA: null,
+  historico: [], timerIA: null, semNumeros: new Set(),
 
   iniciar() {
     clearTimeout(this.timerIA);
@@ -423,6 +487,7 @@ const Game = {
     this.vezDoJogador = true;
     this.jogoAtivo = true;
     this.historico = [];
+    this.semNumeros = new Set();
 
     UI.renderizarMao();
     UI.atualizarInfo();
@@ -489,6 +554,8 @@ const Game = {
       document.getElementById('btnPassar').classList.remove('d-none');
       return;
     }
+    // Comprar prova que o jogador não tinha nenhuma das duas pontas (substitui o que se sabia).
+    if (this.tabuleiro.length) this.semNumeros = new Set(this.extremidades);
     const peca = this.estoque.pop();
     this.maoJogador.push(peca);
     AudioManager.tocar('comprar');
@@ -513,6 +580,7 @@ const Game = {
 
   passarVez() {
     if (!this.vezDoJogador || !this.jogoAtivo) return;
+    if (this.tabuleiro.length) this.extremidades.forEach(n => this.semNumeros.add(n));
     this.adicionarHistorico('👤 Você passou a vez');
     AudioManager.tocar('passar');
     UI.setMensagem('secondary', '⏩ Você passou. IA jogando...');
@@ -523,74 +591,52 @@ const Game = {
     this.timerIA = setTimeout(() => this.turnoIA(), 900);
   },
 
+  escolherJogadaIA(dificuldade) {
+    return IA.escolher({
+      mao: this.maoIA, tabuleiro: this.tabuleiro,
+      extremidades: this.extremidades, semNumeros: this.semNumeros
+    }, dificuldade);
+  },
+
+  aplicarJogadaIA(c) {
+    this.maoIA.splice(c.indice, 1);
+    if (!this.tabuleiro.length) {
+      this.tabuleiro.push(c.peca);
+      this.extremidades = [c.peca[0], c.peca[1]];
+    } else if (c.lado === 'esquerda') {
+      this.tabuleiro.unshift(c.peca);
+      this.extremidades[0] = c.peca[0];
+    } else {
+      this.tabuleiro.push(c.peca);
+      this.extremidades[1] = c.peca[1];
+    }
+  },
+
   turnoIA() {
     if (!this.jogoAtivo || this.vezDoJogador) return;
 
     const dif = document.getElementById('dificuldade').value;
-    const jogaveis = this.maoIA.filter(p => this.podeJogar(p));
+    let jogada = this.escolherJogadaIA(dif);
+    let comprou = false;
 
-    if (jogaveis.length > 0) {
-      let peca;
-      if (dif === 'easy') peca = jogaveis[Math.floor(Math.random() * jogaveis.length)];
-      else if (dif === 'medium') {
-        const equilibradas = jogaveis.filter(p => (p[0]+p[1]) >=5 && (p[0]+p[1]) <=8);
-        peca = (equilibradas.length ? equilibradas : jogaveis)[Math.floor(Math.random() * (equilibradas.length || jogaveis.length))];
-      } else {
-        peca = jogaveis.reduce((best, p) => (p[0]+p[1]) > (best[0]+best[1]) ? p : best);
-      }
+    // Sem encaixe: compra até achar uma peça jogável ou esgotar a reserva.
+    while (!jogada && this.estoque.length > 0) {
+      this.maoIA.push(this.estoque.pop());
+      jogada = this.escolherJogadaIA(dif);
+      comprou = true;
+    }
 
-      const indiceOriginal = this.maoIA.indexOf(peca);
-      let lado;
-      const encaixaEsq = peca[0] === this.extremidades[0] || peca[1] === this.extremidades[0];
-      const encaixaDir = peca[0] === this.extremidades[1] || peca[1] === this.extremidades[1];
-
-      if (encaixaEsq && (!encaixaDir || Math.random() > 0.5)) {
-        lado = 'esquerda';
-        if (peca[1] !== this.extremidades[0]) peca = [peca[1], peca[0]];
-        this.tabuleiro.unshift(peca);
-        this.extremidades[0] = peca[0];
-      } else {
-        lado = 'direita';
-        if (peca[0] !== this.extremidades[1]) peca = [peca[1], peca[0]];
-        this.tabuleiro.push(peca);
-        this.extremidades[1] = peca[1];
-      }
-
-      this.maoIA.splice(indiceOriginal, 1);
-      this.adicionarHistorico(`🤖 IA jogou [${peca[0]}|${peca[1]}] na ${lado}`);
+    if (jogada) {
+      this.aplicarJogadaIA(jogada);
+      const texto = `[${jogada.peca[0]}|${jogada.peca[1]}]`;
+      this.adicionarHistorico(`🤖 IA ${comprou ? 'comprou e jogou' : 'jogou'} ${texto}${comprou ? '' : ' na ' + jogada.lado}`);
       AudioManager.tocar('ia_joga');
       UI.renderizarTabuleiro();
       UI.atualizarInfo();
-      UI.setMensagem('danger', `🤖 IA jogou [${peca[0]}|${peca[1]}] na ${lado}.`);
+      UI.setMensagem('danger', `🤖 IA ${comprou ? 'comprou e jogou' : 'jogou'} ${texto}${comprou ? '' : ' na ' + jogada.lado}.`);
     } else {
-      let comprou = false;
-      while (this.estoque.length > 0 && !comprou) {
-        const nova = this.estoque.pop();
-        this.maoIA.push(nova);
-        if (this.podeJogar(nova)) {
-          comprou = true;
-          let p = [...nova];
-          const encaixaE = p[0] === this.extremidades[0] || p[1] === this.extremidades[0];
-          if (encaixaE) {
-            if (p[1] !== this.extremidades[0]) p = [p[1], p[0]];
-            this.tabuleiro.unshift(p);
-            this.extremidades[0] = p[0];
-          } else {
-            if (p[0] !== this.extremidades[1]) p = [p[1], p[0]];
-            this.tabuleiro.push(p);
-            this.extremidades[1] = p[1];
-          }
-          this.maoIA = this.maoIA.filter(x => !(x[0] === nova[0] && x[1] === nova[1]));
-          this.adicionarHistorico(`🤖 IA comprou e jogou [${p[0]}|${p[1]}]`);
-          UI.renderizarTabuleiro();
-          UI.atualizarInfo();
-          UI.setMensagem('danger', `🤖 IA comprou e jogou [${p[0]}|${p[1]}].`);
-        }
-      }
-      if (!comprou) {
-        this.adicionarHistorico('🤖 IA passou a vez');
-        UI.setMensagem('secondary', '🤖 IA passou. Sua vez!');
-      }
+      this.adicionarHistorico('🤖 IA passou a vez');
+      UI.setMensagem('secondary', '🤖 IA passou. Sua vez!');
     }
 
     if (this.verificarFimDeJogo()) return;
